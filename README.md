@@ -2,6 +2,8 @@
 
 An assistive human-robot interaction prototype that lets users scroll a paired smartphone using only their gaze. A webcam tracks the user's eyes, a Python pipeline classifies their gaze into UP / NEUTRAL / DOWN zones, and a Raspberry Pi Zero W forwards Page Up / Page Down keystrokes to the phone over Bluetooth HID — no companion app required on the phone.
 
+This project is built on top of [EyeTrax](https://github.com/ck-zhang/eyetrax), a webcam-based eye-tracking library. EyeTrax provides the vision pipeline (feature extraction, calibration, gaze prediction); this project adds the neutral-baseline logic, zone classification, cooldown gate, and Bluetooth HID bridge.
+
 ![System Architecture](docs/system_architecture.png)
 
 ---
@@ -18,9 +20,9 @@ Eye Scroll targets this gap: a low-cost, modular, gaze-driven interface that wor
 
 ## How It Works
 
-1. **9-point calibration** — The user looks at nine on-screen dots to train the gaze model and map iris position to screen coordinates.
+1. **9-point calibration** — The user looks at nine on-screen dots to train the gaze model and map iris position to screen coordinates. (Provided by EyeTrax via `run_9_point_calibration`.)
 2. **Neutral baseline** — The user looks straight ahead for 3 seconds; the average Y-coordinate is recorded as their resting position.
-3. **Live loop** — Each webcam frame is passed through feature extraction and gaze prediction, then smoothed and classified into UP / DOWN / NEUTRAL against the calibrated thresholds.
+3. **Live loop** — Each webcam frame is passed through EyeTrax's feature extraction and gaze prediction, then classified into UP / DOWN / NEUTRAL against the calibrated thresholds.
 4. **Cooldown gate** — A 1.5-second cooldown prevents repeated triggers from a single sustained gaze, acting as a spam filter.
 5. **HID emulation** — The host sends a Page Up / Page Down keystroke to a Raspberry Pi Zero W, which presents as a Bluetooth keyboard to the paired mobile device.
 
@@ -47,6 +49,14 @@ See `docs/system_architecture.png` for the full pipeline diagram.
 - (For the phone-facing deployment) A Raspberry Pi Zero W configured as a Bluetooth HID peripheral
 - **OS:** Windows is the primary tested platform (the launcher is a `.bat`); the Python code itself is cross-platform.
 
+### Key Dependencies
+
+- [`eyetrax`](https://github.com/ck-zhang/eyetrax) — gaze estimation, calibration, and optional gaze filtering
+- [`opencv-python`](https://pypi.org/project/opencv-python/) — webcam capture and preview overlay
+- [`pynput`](https://pypi.org/project/pynput/) — keyboard emulation (Page Up / Page Down)
+
+See `requirements.txt` for the full pinned list.
+
 ---
 
 ## Setup
@@ -69,7 +79,7 @@ pip install -r requirements.txt
 
 Running the System
 
-On Windows, simply double-click start_eyescroll.bat. It will automatically activate the bundled venv and run the script.
+On Windows, after completing the Setup steps above, simply double-click start_eyescroll.bat. It will activate your local venv and run the script.
 
 Or run manually from the terminal:
 bash
@@ -96,14 +106,12 @@ python
 NEUTRAL_OFFSET_UP   = 600      # How far above neutral counts as "looking up"
 NEUTRAL_OFFSET_DOWN = 600      # How far below neutral counts as "looking down"
 TRIGGER_COOLDOWN    = 1.5      # Seconds between scrolls
-SMOOTHING_WINDOW    = 5        # Number of past frames to average (1 = no smoothing)
 
     Increase the offsets if scrolls fire too easily (e.g., you look slightly up and it triggers).
 
     Increase TRIGGER_COOLDOWN if the scroll feels too fast or uncontrollable.
 
-    Set SMOOTHING_WINDOW = 1 to disable smoothing entirely (matches the original prototype behaviour).
-
+EyeTrax also exposes optional smoothing filters (kalman, kalman_ema, kde) — see the EyeTrax documentation if you want to enable them.
 Hardware Overview
 
     Structural frame: Two 2020 T-slot aluminium extrusions on perpendicular sliding axes, joined with 3-D printed joints for adjustable height and pitch.
@@ -121,9 +129,9 @@ Status & Known Limitations
 
     The pipeline currently classifies on the vertical (Y) axis only.
 
-    Smoothing is applied as a simple moving average over the last N frames; there is no adaptive filtering.
-
     Calibration is one-shot per session; gradual eye-position drift over a long session is not corrected dynamically.
+
+    Neutral baseline assumes the user is looking roughly straight ahead at the screen for the 3-second capture window.
 
 Future Directions
 
@@ -133,12 +141,33 @@ Future Directions
 
     Servo Tracking: Adding low-cost servos to the arm so it follows the user's head and maintains optimal screen placement.
 
-    Explicit Smoothing: Implementing a rolling average or low-pass filter to reduce jitter and allow a shorter cooldown.
-
     Multi-Axis Zones: Expanding the logic (left / right / select) to widen the command set.
 
+Acknowledgements
+
+This project is built on EyeTrax by Chenkai Zhang, which provides the underlying webcam gaze-estimation pipeline (feature extraction, 9-point calibration, and gaze prediction). EyeTrax is MIT-licensed.
+
+If you use this project or EyeTrax in academic work, please cite EyeTrax:
+bibtex
+
+@software{Zhang2025_EyeTrax,
+  author       = {Chenkai Zhang},
+  title        = {EyeTrax},
+  version      = {0.2.2},
+  date         = {2025-04-23},
+  url          = {https://pypi.org/project/eyetrax/},
+  repository   = {https://github.com/ck-zhang/EyeTrax},
+  doi          = {10.5281/zenodo.17188537},
+  keywords     = {eye tracking, computer vision}
+}
+
+The physical phone holder is based on Jakub Lattenberg's Multifunctional Arm, licensed CC BY 4.0.
 References
 
     [1] J. Lattenberg, "Multifunctional Arm (Phone Holder)," Printables.com, Aug. 17, 2025. [Online]. Available: https://www.printables.com/model/1153921-multifunctional-arm-phone-holder
 
-    [2] Social Robots: Principles of Interaction Design and User Studies. [Online]. Available: https://link.springer.com/chapter/10.1007/978-981-19-1983-1_13
+    [2] C. Zhang, EyeTrax, version 0.2.2, 2025. [Online]. Available: https://github.com/ck-zhang/eyetrax
+
+License
+
+This project is licensed under the MIT License — see the LICENSE file for details.
